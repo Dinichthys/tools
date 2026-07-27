@@ -291,7 +291,7 @@ func findStructConstructors(pass *analysis.Pass, root inspector.Cursor) {
 			typ = types.Unalias(ptr.Elem())
 		}
 
-		st, ok := typ.Underlying().(*types.Struct)
+		st, ok := types.Unalias(typ.Underlying()).(*types.Struct)
 		if !ok {
 			continue
 		}
