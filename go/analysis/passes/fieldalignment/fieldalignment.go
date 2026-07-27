@@ -67,18 +67,28 @@ var Analyzer = &analysis.Analyzer{
 	Run:      run,
 }
 
+var constructorsFix bool
+
+func init() {
+	Analyzer.Flags.BoolVar(&constructorsFix, "constructor", false, "enable constructor fixes")
+}
+
 func run(pass *analysis.Pass) (any, error) {
 	inspect := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
-	for curStruct := range inspect.Root().Preorder((*ast.StructType)(nil)) {
-		s := curStruct.Node().(*ast.StructType)
-		// For every named struct defined as "type Name struct { ... }",
-		// the *ast.StructType node has a parent *ast.TypeSpec,
-		// which contains the struct's name in its Name field.
-		name := "struct" // (anonymous)
-		if spec, ok := curStruct.Parent().Node().(*ast.TypeSpec); ok {
-			name = spec.Name.Name
+	if constructorsFix {
+		findStructConstructors(pass, inspect.Root())
+	} else {
+		for curStruct := range inspect.Root().Preorder((*ast.StructType)(nil)) {
+			s := curStruct.Node().(*ast.StructType)
+			// For every named struct defined as "type Name struct { ... }",
+			// the *ast.StructType node has a parent *ast.TypeSpec,
+			// which contains the struct's name in its Name field.
+			name := "struct" // (anonymous)
+			if spec, ok := curStruct.Parent().Node().(*ast.TypeSpec); ok {
+				name = spec.Name.Name
+			}
+			fieldalignment(pass, s, name)
 		}
-		fieldalignment(pass, s, name)
 	}
 
 	return nil, nil
@@ -268,6 +278,60 @@ func optimalOrder(str *types.Struct, sizes *gcSizes) (*types.Struct, []int) {
 		indexes[i] = e.index
 	}
 	return types.NewStruct(fields, nil), indexes
+}
+
+func findStructConstructors(pass *analysis.Pass, root inspector.Cursor) {
+	info := pass.TypesInfo
+	for cur := range root.Preorder((*ast.CompositeLit)(nil)) {
+		lit := cur.Node().(*ast.CompositeLit)
+
+		typ := types.Unalias(info.TypeOf(lit))
+
+		if ptr, ok := typ.(*types.Pointer); ok {
+			typ = types.Unalias(ptr.Elem())
+		}
+
+		st, ok := typ.Underlying().(*types.Struct)
+		if !ok {
+			continue
+		}
+
+		if len(lit.Elts) == 0 {
+			continue
+		} else if _, ok := lit.Elts[0].(*ast.KeyValueExpr); ok {
+			continue
+		}
+
+		clone := astutil.CloneNode(lit)
+		for i := range lit.Elts {
+			clone.Elts[i] = &ast.KeyValueExpr{
+				Key: &ast.Ident{
+					Name: st.Field(i).Name(),
+				},
+				Value: clone.Elts[i],
+			}
+		}
+
+		// Write the newly aligned construct node to get the content for suggested fixes.
+		var buf bytes.Buffer
+		if err := format.Node(&buf, token.NewFileSet(), clone); err != nil {
+			return
+		}
+
+		pass.Report(analysis.Diagnostic{
+			Pos:     lit.Pos(),
+			End:     lit.End(),
+			Message: "Unkeyed literals",
+			SuggestedFixes: []analysis.SuggestedFix{{
+				Message: "Unkeyed literals",
+				TextEdits: []analysis.TextEdit{{
+					Pos:     lit.Pos(),
+					End:     lit.End(),
+					NewText: buf.Bytes(),
+				}},
+			}},
+		})
+	}
 }
 
 // gcSizes implements cmd/compile layout rules, providing ptrdata (GC

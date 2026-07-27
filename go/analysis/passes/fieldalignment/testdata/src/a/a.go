@@ -44,3 +44,7 @@ type WithComments struct { // want "WithComments has size 8 but the optimal size
 
 	// and a last comment
 }
+
+func foo() Bad {
+	return Bad{1, 257, 1}
+}
