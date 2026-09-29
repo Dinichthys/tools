@@ -1,8 +1,6 @@
-diff --git a/go/analysis/internal/checker/checker.go b/go/analysis/internal/checker/checker.go
-index 3bc6fb23c..xxxxxxxxx 100644
 --- a/go/analysis/internal/checker/checker.go
 +++ b/go/analysis/internal/checker/checker.go
-@@ -15,12 +15,12 @@ import (
+@@ -17,10 +17,10 @@
  	"flag"
  	"fmt"
  	"io"
@@ -14,12 +12,10 @@ index 3bc6fb23c..xxxxxxxxx 100644
  	"runtime/pprof"
  	"runtime/trace"
  	"sort"
- 	"strings"
- 	"time"
-@@ -152,10 +152,20 @@ func Run(args []string, analyzers []*analysis.Analyzer) (exitcode int) {
+@@ -152,10 +152,20 @@
  		log.Printf("load %s", args)
  	}
-
+ 
 -	// Optimization: if the selected analyzers don't produce/consume
 -	// facts, we need source only for the initial packages.
 -	allSyntax := needFacts(analyzers)
@@ -41,8 +37,7 @@ index 3bc6fb23c..xxxxxxxxx 100644
  	if err != nil {
  		log.Print(err)
  		exitAtLeast(1)
-@@ -193,27 +203,12 @@ func Run(args []string, analyzers []*analysis.Analyzer) (exitcode int) {
-
+@@ -194,23 +204,7 @@
  	// Don't print the diagnostics,
  	// but apply all fixes from the root actions.
  	if analysisflags.Fix {
@@ -67,16 +62,10 @@ index 3bc6fb23c..xxxxxxxxx 100644
  			// Fail when applying fixes failed.
  			log.Print(err)
  			exitAtLeast(1)
- 			return
- 		}
-+
- 		// Don't proceed to print text/JSON,
- 		// and don't report an error
- 		// just because there were diagnostics.
-@@ -229,6 +224,211 @@ func Run(args []string, analyzers []*analysis.Analyzer) (exitcode int) {
+@@ -231,6 +225,238 @@
  	return
  }
-
+ 
 +// runBatched analyzes all non-standard-library packages in the transitive
 +// dependency graph of patterns without retaining typed syntax for the entire
 +// graph at once.
@@ -91,12 +80,11 @@ index 3bc6fb23c..xxxxxxxxx 100644
 +	// Discover the complete package graph without parsing or type-checking
 +	// source files. NeedForTest lets collectDependencyPaths distinguish
 +	// ordinary packages from synthetic test variants.
-+	const metaMode =
-+		packages.NeedName |
-+			packages.NeedImports |
-+			packages.NeedDeps |
-+			packages.NeedModule |
-+			packages.NeedForTest
++	const metaMode = packages.NeedName |
++		packages.NeedImports |
++		packages.NeedDeps |
++		packages.NeedModule |
++		packages.NeedForTest
 +
 +	meta, err := packages.Load(&packages.Config{
 +		Mode:  metaMode,
@@ -313,7 +301,7 @@ index 3bc6fb23c..xxxxxxxxx 100644
  func collectDeps(roots []*packages.Package) []*packages.Package {
  	visited := make(map[string]bool)
  	var result []*packages.Package
-@@ -330,7 +530,7 @@ func collectDeps(roots []*packages.Package) []*packages.Package {
+@@ -330,7 +556,7 @@
  // load loads the initial packages. Returns only top-level loading
  // errors. Does not consider errors in packages.
  func load(patterns []string, allSyntax bool) ([]*packages.Package, error) {
